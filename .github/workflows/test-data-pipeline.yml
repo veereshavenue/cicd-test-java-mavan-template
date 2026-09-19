@@ -1,0 +1,65 @@
+name: Test Data Pipeline (Discover -> Provision -> Execute -> Cleanup)
+
+on:
+  workflow_dispatch:
+    inputs:
+      technologyStack: { description: "Technology stack", required: true, type: string, default: "java-maven" }
+      purpose:         { description: "Purpose / Test Type", required: true, type: string, default: "Build-Test-Scan-Deploy" }
+      scenario:        { description: "Test scenario", required: false, type: string, default: "deploy-to-hydra-byoi" }
+      commitRequired:  { description: "Commit required?", required: true, type: boolean, default: true }
+
+jobs:
+  discover:
+    uses: ./.github/workflows/discovery.yml
+    with:
+      technologyStack: ${{ inputs.technologyStack }}
+      purpose: ${{ inputs.purpose }}
+      scenario: ${{ inputs.scenario }}
+      commitRequired: ${{ inputs.commitRequired }}
+    secrets:
+      TEST_DATA_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+
+  provision:
+    needs: discover
+    uses: ./.github/workflows/provision-branch.yml
+    with:
+      runId: ${{ github.run_id }}-${{ github.run_attempt }}
+    secrets:
+      TEST_DATA_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+
+  execute:
+    needs: provision
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout execution branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.provision.outputs.repository }}
+          ref: ${{ needs.provision.outputs.execution_branch }}
+          token: ${{ secrets.TEST_DATA_TOKEN }}
+
+      - name: Commit test changes (only on run branch)
+        if: needs.provision.outputs.branch_created == 'true'
+        run: |
+          git config user.name  "svc-qe-bot"
+          git config user.email "svc-qe-bot@users.noreply.github.com"
+          echo "run=${{ github.run_id }}" > .test-run-marker
+          git add .test-run-marker
+          git commit -m "test: run ${{ github.run_id }}"
+          git push origin HEAD
+
+      - name: Execute test scenario
+        run: |
+          echo "Run BDD scenario against ${{ needs.provision.outputs.repository }}@${{ needs.provision.outputs.execution_branch }}"
+          # Replace with the real command, e.g. mvn -B test -Dcucumber.filter.tags=@hydra-byoi
+
+  cleanup:
+    needs: [provision, execute]
+    if: always() && needs.provision.outputs.branch_created == 'true'
+    uses: ./.github/workflows/cleanup.yml
+    with:
+      repository: ${{ needs.provision.outputs.repository }}
+      branch: ${{ needs.provision.outputs.execution_branch }}
+      runId: ${{ github.run_id }}-${{ github.run_attempt }}
+    secrets:
+      TEST_DATA_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}

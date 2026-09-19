@@ -1,0 +1,36 @@
+name: Post-Execution Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository: { description: "org/repo", required: true, type: string }
+      branch:     { description: "Run-ID branch", required: true, type: string }
+      runId:      { description: "Run ID", required: true, type: string }
+  workflow_call:
+    inputs:
+      repository: { required: true, type: string }
+      branch:     { required: true, type: string }
+      runId:      { required: true, type: string }
+    secrets:
+      TEST_DATA_TOKEN: { required: true }
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/cicd-test-bdd-testsuite
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Delete Run-ID branch
+        env:
+          GH_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+          REPO: ${{ inputs.repository }}
+          BRANCH: ${{ inputs.branch }}
+          RUN_ID: ${{ inputs.runId }}
+        run: |
+          cd scripts
+          python cleanup_branch.py --repository "$REPO" --branch "$BRANCH" --run-id "$RUN_ID"

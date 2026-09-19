@@ -1,0 +1,45 @@
+name: Scheduled Metadata Validation
+
+on:
+  schedule:
+    - cron: "30 2 * * *"   # daily 02:30 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["metadata/**"]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Validate metadata
+        env:
+          GH_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+        run: |
+          cd scripts
+          python validate_metadata.py \
+            --catalog ../metadata/test-template-repos.json \
+            --report ../validation-report.md
+
+      - name: Publish summary
+        if: always()
+        run: cat validation-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "Test data metadata validation failed ($(date -u +%F))" \
+            --body-file validation-report.md || true
