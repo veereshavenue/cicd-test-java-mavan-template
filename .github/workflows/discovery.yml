@@ -1,0 +1,60 @@
+name: Test Data Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      technologyStack: { description: "Technology stack", required: true, type: string }
+      purpose:         { description: "Purpose / Test Type", required: true, type: string }
+      scenario:        { description: "Test scenario", required: false, type: string, default: "" }
+      commitRequired:  { description: "Does execution require a commit?", required: true, type: boolean, default: false }
+  workflow_call:
+    inputs:
+      technologyStack: { required: true, type: string }
+      purpose:         { required: true, type: string }
+      scenario:        { required: false, type: string, default: "" }
+      commitRequired:  { required: true, type: boolean, default: false }
+    secrets:
+      TEST_DATA_TOKEN: { required: true }
+    outputs:
+      repository:      { value: "${{ jobs.discover-test-data.outputs.repository }}" }
+      base_branch:     { value: "${{ jobs.discover-test-data.outputs.base_branch }}" }
+      commit_required: { value: "${{ jobs.discover-test-data.outputs.commit_required }}" }
+
+jobs:
+  discover-test-data:
+    runs-on: ubuntu-latest
+    outputs:
+      repository:      ${{ steps.discover.outputs.repository }}
+      base_branch:     ${{ steps.discover.outputs.base_branch }}
+      commit_required: ${{ steps.discover.outputs.commit_required }}
+    steps:
+      - name: Checkout discovery repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/cicd-test-bdd-testsuite
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Discover template repository and branch
+        id: discover
+        env:
+          GH_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+          TECHNOLOGY_STACK: ${{ inputs.technologyStack }}
+          PURPOSE: ${{ inputs.purpose }}
+          SCENARIO: ${{ inputs.scenario }}
+          COMMIT_REQUIRED: ${{ inputs.commitRequired }}
+        run: |
+          cd scripts
+          python discover_test_data.py \
+            --catalog ../metadata/test-template-repos.json \
+            --technology-stack "$TECHNOLOGY_STACK" \
+            --purpose "$PURPOSE" \
+            --scenario "$SCENARIO" \
+            --commit-required "$COMMIT_REQUIRED" \
+            --output ../discovery-result.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discovery-result
+          path: discovery-result.json
