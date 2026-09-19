@@ -1,0 +1,47 @@
+name: Branch Provisioning
+
+on:
+  workflow_call:
+    inputs:
+      runId: { required: true, type: string }
+    secrets:
+      TEST_DATA_TOKEN: { required: true }
+    outputs:
+      repository:       { value: "${{ jobs.provision.outputs.repository }}" }
+      execution_branch: { value: "${{ jobs.provision.outputs.execution_branch }}" }
+      branch_created:   { value: "${{ jobs.provision.outputs.branch_created }}" }
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    outputs:
+      repository:       ${{ steps.provision.outputs.repository }}
+      execution_branch: ${{ steps.provision.outputs.execution_branch }}
+      branch_created:   ${{ steps.provision.outputs.branch_created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/cicd-test-bdd-testsuite
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - uses: actions/download-artifact@v4
+        with: { name: discovery-result }
+
+      - name: Provision execution branch
+        id: provision
+        env:
+          GH_TOKEN: ${{ secrets.TEST_DATA_TOKEN }}
+          RUN_ID: ${{ inputs.runId }}
+        run: |
+          cd scripts
+          python provision_branch.py \
+            --discovery-result ../discovery-result.json \
+            --run-id "$RUN_ID" \
+            --output ../provision-result.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: provision-result
+          path: provision-result.json

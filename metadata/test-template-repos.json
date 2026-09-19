@@ -1,0 +1,18 @@
+[
+  {
+    "technologyStack": "java",
+    "purpose": "build",
+    "scenario": "",
+    "repository": "amex-eng/qa-java-gradle-app",
+    "baseBranch": "main",
+    "commitRequired": false
+  },
+  {
+    "technologyStack": "java",
+    "purpose": "bdd",
+    "scenario": "login",
+    "repository": "amex-eng/cicd-gh-qa-operations",
+    "baseBranch": "main",
+    "commitRequired": true
+  }
+]
